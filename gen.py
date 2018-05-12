@@ -55,24 +55,31 @@ def header3(file, r, mi, m, n, s, inp):
     file.write('//!DESC mapping {}_{}\n'.format(mi + 1, (n//4)%(s//4) + 1))
     for i in range(s//4):
         file.write('//!BIND {}{}\n'.format(inp if r == 0 and mi == 0 else "MODEL", i+1 + (0 if (r * m + mi) % 2 == 0 else 20)))
-    if mi == m-1 and (mi+1)*(r+1) > 1:
-        file.write('//!BIND {}{}\n'.format(inp, (n//4)%(s//4) + 1))
     file.write('//!SAVE MODEL{}\n'.format((n//4)%(s//4) + 1 + (20 if (r * m + mi) % 2 == 0 else 0)))
+    file.write('//!COMPONENTS 4\n')
+
+def header3_1(file, r, mi, m, n, s, inp):
+    base_header(file)
+    file.write('//!DESC sub-band residuals {}\n'.format((n//4)%(s//4) + 1))
+    for i in range(s//4):
+        file.write('//!BIND MODEL{}\n'.format(i + 1 + (20 if (r * m + mi) % 2 == 0 else 0)))
+    file.write('//!BIND {}{}\n'.format(inp, (n//4)%(s//4) + 1))
+    file.write('//!SAVE RES{}\n'.format((n//4)%(s//4) + 1))
     file.write('//!COMPONENTS 4\n')
 
 def header4(file, s, m, r, n, d):
     base_header(file)
     file.write('//!DESC expanding {}\n'.format((n//4)%(d//4) + 1))
     for i in range(s//4):
-        file.write('//!BIND MODEL{}\n'.format(i + 1 + (20 if (r * m) % 2 == 1 else 0)))
-    file.write('//!SAVE EXPANDED{}\n'.format((n//4)%(d//4) + 1 + (20 if (r * m) % 2 == 1 else 0)))
+        file.write('//!BIND RES{}\n'.format(i + 1))
+    file.write('//!SAVE EXPANDED{}\n'.format((n//4)%(d//4) + 1))
     file.write('//!COMPONENTS 4\n')
 
 def header5(file, m, r, n, d, inp):
     base_header(file)
     file.write('//!DESC sub-pixel convolution {}\n'.format((n//4)%(d//4) + 1))
-    file.write('//!BIND {}{}\n'.format(inp, (n//4)%(d//4) + 1 + (20 if (r * m) % 2 == 1 else 0)))
-    file.write('//!SAVE {}{}\n'.format(inp, (n//4)%(d//4) + 1 + (20 if (r * m) % 2 == 1 else 0)))
+    file.write('//!BIND {}{}\n'.format(inp, (n//4)%(d//4) + 1))
+    file.write('//!SAVE {}{}\n'.format(inp, (n//4)%(d//4) + 1))
     file.write('//!COMPONENTS 4\n')
 
 def header6(file, m, r, d, inp, grl):
@@ -83,7 +90,7 @@ def header6(file, m, r, d, inp, grl):
     if grl:
         file.write('//!BIND HOOKED\n')
     for i in range(d//4):
-        file.write('//!BIND {}{}\n'.format(inp, i+1 + (20 if (r * m) % 2 == 1 else 0)))
+        file.write('//!BIND {}{}\n'.format(inp, i + 1))
     file.write('//!OFFSET -{}.0 -{}.0\n'.format(scale//2, scale//2))
 
 def main():
@@ -170,16 +177,39 @@ def main():
                                         format_weights(weights[l], n), format_weights(weights[l+1], n),
                                         format_weights(weights[l+2], n), format_weights(weights[l+3], n),
                                         idx + 1 + (20 if (ri * m + mi) % 2 == 1 else 0), x, y))
-                    ln = get_line_number("alpha{}".format(3 if mi == m - 1 else mi + 4), fname)
-                    alphas = read_weights(fname, ln)
-                    if mi == m - 1:
+                    if mi < m - 1:
+                        ln = get_line_number("alpha{}".format(3 if mi == m - 1 else mi + 4), fname)
+                        alphas = read_weights(fname, ln)
+                        file.write('res = max(res, vec4(0.0)) - vec4({}) * max(-res, vec4(0.0));\n'.format(format_weights(alphas[0], n)))
+                    file.write('return res;\n')
+                    file.write('}\n\n')
+
+                if mi == m - 1:
+                    ln = get_line_number("w{}".format(mi + 3 + 100), fname)
+                    weights = read_weights(fname, ln, s*(mi+2))
+                    ln = get_line_number("b{}".format(mi + 3 + 100), fname)
+                    biases = read_weights(fname, ln)
+                    for n in range(0, s, 4):
+                        ln = get_line_number("alpha{}".format(mi + 3 + 100), fname)
+                        alphas = read_weights(fname, ln)
+                        header3_1(file, ri, mi, m, n, s, inp)
+                        file.write('vec4 hook()\n')
+                        file.write('{\n')
+                        for k in range(s//4):
+                            file.write('vec4 res{} = MODEL{}_texOff(vec2(0));\n'.format(k+1, k+1 + (20 if (ri * m + mi) % 2 == 0 else 0)))
+                            file.write('res{} = max(res{}, vec4(0.0)) - vec4({}) * max(-res{}, vec4(0.0));\n'.format(k+1, k+1, format_weights(alphas[0], (k+1-1)*4), k+1))
+
+                        file.write('vec4 res = vec4({});\n'.format(format_weights(biases[0], n)))
+                        for l in range(0, s, 4):
+                            file.write('res += mat4({},{},{},{}) * res{};\n'.format(format_weights(weights[l], n), format_weights(weights[l+1], n), format_weights(weights[l+2], n), format_weights(weights[l+3], n), l//4+1))
+
                         file.write('res += {}{}_texOff(0);\n'.format(inp, (n//4)%(s//4) + 1))
                         if ri == r - 1:
                             ln = get_line_number("alpha2", fname)
                             alphas = read_weights(fname, ln)
-                    file.write('res = max(res, vec4(0.0)) - vec4({}) * max(-res, vec4(0.0));\n'.format(format_weights(alphas[0], n)))
-                    file.write('return res;\n')
-                    file.write('}\n\n')
+                        file.write('res = max(res, vec4(0.0)) - vec4({}) * max(-res, vec4(0.0));\n'.format(format_weights(alphas[0], n)))
+                        file.write('return res;\n')
+                        file.write('}\n\n')
 
         if shrinking:
             # Expanding layer
@@ -195,8 +225,8 @@ def main():
                 file.write('{\n')
                 file.write('vec4 res = vec4({});\n'.format(format_weights(biases[0], n)))
                 for l in range(0, s, 4):
-                    file.write('res += mat4({},{},{},{}) * MODEL{}_texOff(vec2(0.0));\n'.format(format_weights(weights[l], n), format_weights(weights[l+1], n), format_weights(weights[l+2], n), format_weights(weights[l+3], n),
-                    l//4 + 1 + (20 if (r * m) % 2 == 1 else 0)))
+                    file.write('res += mat4({},{},{},{}) * RES{}_texOff(vec2(0.0));\n'.format(format_weights(weights[l], n), format_weights(weights[l+1], n), format_weights(weights[l+2], n), format_weights(weights[l+3], n),
+                    l//4 + 1))
                 file.write('res = max(res, vec4(0.0)) - vec4({}) * max(-res, vec4(0.0));\n'.format(format_weights(alphas[0], n)))
                 file.write('return res;\n')
                 file.write('}\n\n')
@@ -222,7 +252,7 @@ def main():
 
         weights = list(reversed(weights))
         sort = [weights[id[l]].strip(",") for l in range(0, len(id))]
-        inp = "EXPANDED" if shrinking else "MODEL"
+        inp = "EXPANDED" if shrinking else "RES"
         for n in range(0, d, 4):
             header5(file, m, r, n, d, inp)
             file.write('vec4 hook()\n')
@@ -238,7 +268,7 @@ def main():
                         for xi, x in enumerate(range(-radius + (0 if j == 0 and dsize % 2 == 1 else 1), radius + 1)):
                             l = yi * s1 + xi
                             file.write('dot(vec4({}), {}{}_texOff(vec2({},{}))){}\n'.format(format_weights(sort[l+total], n), inp,
-                                        (n//4)%(d//4) + 1 + (20 if (r * m) % 2 == 1 else 0), x, y, ';' if l == s1 * s2 - 1 else '+'))
+                                        (n//4)%(d//4) + 1, x, y, ';' if l == s1 * s2 - 1 else '+'))
                     total = total + l + 1
             file.write('return res;\n')
             file.write('}\n\n')
@@ -251,13 +281,14 @@ def main():
         file.write('vec4 hook()\n')
         file.write('{\n')
         file.write('float res = {};\n'.format(float(biases[0]) + (float(read_weights(fname, grl)[0]) if grl else 0.0)))
-        v = 1 + (20 if (r * m) % 2 == 1 else 0)
-        file.write('vec2 fcoord = fract({}{}_pos * {}{}_size);\n'.format(inp, v, inp, v))
-        file.write('vec2 base = {}{}_pos + (vec2(0.5) - fcoord) * {}{}_pt;\n'.format(inp, v, inp, v))
+        file.write('vec2 fcoord = fract(HOOKED_pos * HOOKED_size);\n')
+        file.write('vec2 base = HOOKED_pos + (vec2(0.5) - fcoord) * HOOKED_pt;\n')
         file.write('ivec2 index = ivec2(fcoord * vec2({}));\n'.format(scale))
-        file.write('res += ({}{}_tex(base)'.format(inp, v))
-        for i in range(d//4-1):
-            file.write('+{}{}_tex(base)'.format(inp, i + 1 + v))
+        file.write('res += (')
+        for i in range(d//4):
+            if i > 0:
+                file.write('+')
+            file.write('{}{}_tex(base)'.format(inp, i + 1))
         file.write(')[index.y * {} + index.x];\n'.format(scale))
 
         if grl:

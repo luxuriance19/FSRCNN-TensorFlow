@@ -49,6 +49,10 @@ class FSRCNN(object):
             conv = self.prelu(conv, i)
             conv = tf.nn.conv2d(conv, weights, strides=[1,1,1,1], padding='SAME') + biases
             if i == m + 2:
+              conv = self.prelu(conv, i+100)
+              self.weights['w{}'.format(i+100)] = tf.get_variable('w{}'.format(i+100), initializer=tf.random_normal([1, 1, s, s], stddev=0.3536, dtype=tf.float32))
+              self.biases['b{}'.format(i+100)] = tf.get_variable('b{}'.format(i+100), initializer=tf.zeros([s]))
+              conv = tf.nn.conv2d(conv, self.weights['w{}'.format(i+100)], strides=[1,1,1,1], padding='SAME') + self.biases['b{}'.format(i+100)]
               conv = tf.add(conv, features)
           scope.reuse_variables()
     conv = self.prelu(conv, 2)
