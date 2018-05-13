@@ -167,7 +167,7 @@ def thread_train_setup(config):
   pool = Pool(config.threads)
 
   # Distribute |images_per_thread| images across each worker process
-  config_values = [config.image_size, config.label_size, config.stride, config.scale, config.radius, config.distort]
+  config_values = [config.image_size, config.label_size, config.stride, config.scale, config.padding // 2, config.distort]
   images_per_thread = len(data) // config.threads
   workers = []
   for thread in range(config.threads):
@@ -207,7 +207,7 @@ def train_input_setup(config):
     sys.exit()
 
   sess = config.sess
-  image_size, label_size, stride, scale, padding = config.image_size, config.label_size, config.stride, config.scale, config.radius
+  image_size, label_size, stride, scale, padding = config.image_size, config.label_size, config.stride, config.scale, config.padding // 2
 
   # Load data path
   data = prepare_data(sess, dataset=config.data_dir)
@@ -244,7 +244,7 @@ def test_input_setup(config):
   Read image files, make their sub-images, and save them as a h5 file format.
   """
   sess = config.sess
-  image_size, label_size, stride, scale, padding = config.image_size, config.label_size, config.stride, config.scale, config.radius
+  image_size, label_size, stride, scale, padding = config.image_size, config.label_size, config.stride, config.scale, config.padding // 2
 
   # Load data path
   data = prepare_data(sess, dataset="Test")

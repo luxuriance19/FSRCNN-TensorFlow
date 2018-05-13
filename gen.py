@@ -4,7 +4,7 @@ from utils import bilinear_upsample_weights
 import numpy as np
 
 scale = 2
-radius = 2
+radius = 1
 
 dsize = radius * scale * 2 + 1
 
@@ -102,12 +102,12 @@ def main():
         shrinking = False
     else:
         shrinking = True
-    dst = fname.replace("_", "-").replace("weights", "FSRCNNX_x{}_r{}_".format(scale, radius)).replace("txt", "glsl")
+    dst = fname.replace("_", "-").replace("weights", "FSRCNNX_x{}_".format(scale)).replace("txt", "glsl")
     with open(dst, 'w') as file:
 
         # Feature layer
         ln = get_line_number("w1", fname)
-        weights = read_weights(fname, ln, (radius*2+1)**2)
+        weights = read_weights(fname, ln, (2*2+1)**2)
         ln = get_line_number("b1", fname)
         biases = read_weights(fname, ln)
         for n in range(0, d, 4):
@@ -117,7 +117,7 @@ def main():
             file.write('vec4 res = vec4({});\n'.format(format_weights(biases[0], n)))
             p = 0
             for l in range(0, len(weights)):
-                y, x = p%(radius*2+1)-radius, p//(radius*2+1)-radius
+                y, x = p%(2*2+1)-2, p//(2*2+1)-2
                 p += 1
                 file.write('res += vec4({}) * float(LUMA_texOff(vec2({},{})));\n'.format(format_weights(weights[l], n), x, y))
             if shrinking:

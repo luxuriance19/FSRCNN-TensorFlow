@@ -36,7 +36,7 @@ class Model(object):
     self.distort = config.distort
     self.params = config.params
 
-    self.padding = self.radius * 2
+    self.padding = 4
     # Different image/label sub-sizes for different scaling factors x2, x3, x4
     scale_factors = [[10 + self.padding, 20], [7 + self.padding, 21], [6 + self.padding, 24]]
     self.image_size, self.label_size = scale_factors[self.scale - 2]
